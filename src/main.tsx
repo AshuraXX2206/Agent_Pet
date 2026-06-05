@@ -6,12 +6,20 @@ import { MockLlmClient } from './ai/mockLlmClient';
 import type { AgentBrain } from './ai/types';
 import { stepWorldWithBrain } from './simulation/engine';
 import { createInitialWorld } from './simulation/seed';
-import type { AgentNeeds, AgentProfile } from './simulation/types';
+import type { AgentNeeds, AgentProfile, MapTile, WorldState } from './simulation/types';
 import './styles.css';
 
 type BrainMode = 'local' | 'mock-llm';
 
 const mockLlmBrain = new LlmBrain(new MockLlmClient());
+const roleIcon: Record<AgentProfile['role'], string> = {
+  Inventor: '⚙️',
+  Gardener: '🌱',
+  Medic: '💊',
+  Cook: '🍲',
+  Scout: '🧭',
+  Artist: '🎨',
+};
 
 function getBrain(mode: BrainMode): AgentBrain {
   return mode === 'local' ? localBrain : mockLlmBrain;
@@ -29,36 +37,83 @@ function NeedBar({ label, value }: { label: keyof AgentNeeds; value: number }) {
   );
 }
 
-function AgentCard({ agent, selected, onSelect }: { agent: AgentProfile; selected: boolean; onSelect: () => void }) {
+function AgentPawn({ agent, selected, onSelect }: { agent: AgentProfile; selected: boolean; onSelect: () => void }) {
+  return (
+    <button className={`agent-pawn ${selected ? 'selected' : ''}`} onClick={onSelect} title={`${agent.name} - ${agent.role}`}>
+      <span>{roleIcon[agent.role]}</span>
+      <strong>{agent.name.slice(0, 1)}</strong>
+    </button>
+  );
+}
+
+function GameTile({ tile, agents, selectedAgentId, onSelectAgent }: {
+  tile: MapTile;
+  agents: AgentProfile[];
+  selectedAgentId: string;
+  onSelectAgent: (agentId: string) => void;
+}) {
+  return (
+    <div className={`game-tile tile-${tile.type} ${tile.walkable ? 'walkable' : 'blocked'}`}>
+      {tile.label ? <span className="tile-label">{tile.label}</span> : null}
+      <div className="pawn-stack">
+        {agents.map((agent) => (
+          <AgentPawn
+            key={agent.id}
+            agent={agent}
+            selected={agent.id === selectedAgentId}
+            onSelect={() => onSelectAgent(agent.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GameMapView({ world, selectedAgentId, onSelectAgent }: {
+  world: WorldState;
+  selectedAgentId: string;
+  onSelectAgent: (agentId: string) => void;
+}) {
+  return (
+    <section className="game-stage">
+      <div
+        className="game-map"
+        style={{
+          gridTemplateColumns: `repeat(${world.map.width}, minmax(44px, 1fr))`,
+        }}
+      >
+        {world.map.tiles.map((tile) => {
+          const agents = world.agents.filter((agent) => agent.position.x === tile.x && agent.position.y === tile.y);
+          return (
+            <GameTile
+              key={`${tile.x}-${tile.y}`}
+              tile={tile}
+              agents={agents}
+              selectedAgentId={selectedAgentId}
+              onSelectAgent={onSelectAgent}
+            />
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function AgentDetail({ agent }: { agent: AgentProfile }) {
   const lowestNeed = useMemo(() => {
     return Object.entries(agent.needs).sort((a, b) => a[1] - b[1])[0][0];
   }, [agent.needs]);
 
   return (
-    <button className={`agent-card ${selected ? 'selected' : ''}`} onClick={onSelect}>
-      <div className="agent-header">
-        <div>
-          <h3>{agent.name}</h3>
-          <p>{agent.role}</p>
-        </div>
-        <span>{agent.location}</span>
-      </div>
-      <p className="personality">{agent.personality}</p>
-      <p className="goal">Goal: {agent.goal}</p>
-      <p className="warning">Lowest need: {lowestNeed}</p>
-      {agent.lastDialogue ? <p className="dialogue-line">“{agent.lastDialogue}”</p> : null}
-    </button>
-  );
-}
-
-function AgentDetail({ agent }: { agent: AgentProfile }) {
-  return (
-    <section className="panel detail-panel">
+    <section className="side-panel detail-panel">
       <div className="section-title">
-        <span>Selected agent</span>
-        <h2>{agent.name}</h2>
+        <span>Selected character</span>
+        <h2>{roleIcon[agent.role]} {agent.name}</h2>
       </div>
       <p className="goal large">{agent.goal}</p>
+      <p className="agent-meta">{agent.role} · {agent.location} · x{agent.position.x}, y{agent.position.y}</p>
+      <p className="warning">Lowest need: {lowestNeed}</p>
+      {agent.lastDialogue ? <p className="dialogue-line">“{agent.lastDialogue}”</p> : null}
 
       <h3>Private thought</h3>
       {agent.lastThought ? (
@@ -72,7 +127,7 @@ function AgentDetail({ agent }: { agent: AgentProfile }) {
           </ul>
         </div>
       ) : (
-        <p className="empty">No thought yet. Step the world to let the agent think.</p>
+        <p className="empty">No thought yet. Step the game to let the agent think.</p>
       )}
 
       <h3>Needs</h3>
@@ -83,33 +138,39 @@ function AgentDetail({ agent }: { agent: AgentProfile }) {
       </div>
 
       <h3>Recent memories</h3>
-      <div className="memory-list">
+      <div className="memory-list compact-scroll">
         {agent.memories.length === 0 ? (
-          <p className="empty">No personal memories yet. Step the world to create life events.</p>
+          <p className="empty">No personal memories yet.</p>
         ) : (
           agent.memories.map((memory) => (
             <article key={memory.id} className="memory">
               <strong>Tick {memory.tick}</strong>
               <p>{memory.text}</p>
-              <span>Importance {memory.importance}/10</span>
             </article>
           ))
         )}
       </div>
+    </section>
+  );
+}
 
-      <h3>Relationships</h3>
-      <div className="relationship-list">
-        {agent.relationships.length === 0 ? (
-          <p className="empty">No relationship changes yet.</p>
-        ) : (
-          agent.relationships.map((relationship) => (
-            <div key={relationship.agentId} className="relationship">
-              <span>{relationship.agentId.replace('agent-', '')}</span>
-              <span>Trust {relationship.trust}</span>
-              <span>Affinity {relationship.affinity}</span>
-            </div>
-          ))
-        )}
+function EventLog({ world }: { world: WorldState }) {
+  return (
+    <section className="side-panel log-panel">
+      <div className="section-title">
+        <span>Game log</span>
+        <h2>Emergent story</h2>
+      </div>
+      <div className="event-list compact-scroll">
+        {world.events.map((event) => (
+          <article key={event.id} className="event">
+            <strong>Tick {event.tick}</strong>
+            <p>{event.text}</p>
+            {event.dialogue ? <p className="dialogue-line">“{event.dialogue}”</p> : null}
+            {event.thought ? <small>{event.thought.emotion} · {event.thought.intention}</small> : null}
+            <span>{event.action}</span>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -134,21 +195,19 @@ function App() {
   }
 
   function handleReset() {
-    setWorld(createInitialWorld());
+    const nextWorld = createInitialWorld();
+    setWorld(nextWorld);
+    setSelectedAgentId(nextWorld.agents[0].id);
   }
 
   return (
-    <main className="app-shell">
-      <section className="hero">
+    <main className="game-shell">
+      <header className="game-hud">
         <div>
-          <p className="eyebrow">AI Agent Life Simulation</p>
-          <h1>Agents that behave like believable people</h1>
-          <p>
-            A small virtual village where each agent has identity, needs, memory, relationships,
-            private thought, dialogue, and a pluggable brain layer for local or LLM-driven decisions.
-          </p>
+          <p className="eyebrow">Agent Pet Game Prototype</p>
+          <h1>Living AI Village</h1>
         </div>
-        <div className="world-controls">
+        <div className="hud-controls">
           <span>Tick {world.tick}</span>
           <span>{world.timeOfDay}</span>
           <span>{activeBrain.name}</span>
@@ -156,48 +215,15 @@ function App() {
             <option value="mock-llm">Mock LLM Brain</option>
             <option value="local">Local Heuristic Brain</option>
           </select>
-          <button onClick={handleStep} disabled={isStepping}>{isStepping ? 'Thinking...' : 'Step world'}</button>
+          <button onClick={handleStep} disabled={isStepping}>{isStepping ? 'Thinking...' : 'Next Turn'}</button>
           <button onClick={handleReset}>Reset</button>
         </div>
-      </section>
+      </header>
 
-      <section className="layout">
-        <div className="panel agents-panel">
-          <div className="section-title">
-            <span>Town population</span>
-            <h2>{world.agents.length} agents</h2>
-          </div>
-          <div className="agent-grid">
-            {world.agents.map((agent) => (
-              <AgentCard
-                key={agent.id}
-                agent={agent}
-                selected={agent.id === selectedAgent.id}
-                onSelect={() => setSelectedAgentId(agent.id)}
-              />
-            ))}
-          </div>
-        </div>
-
+      <section className="game-layout">
         <AgentDetail agent={selectedAgent} />
-
-        <section className="panel log-panel">
-          <div className="section-title">
-            <span>World event log</span>
-            <h2>Emergent story</h2>
-          </div>
-          <div className="event-list">
-            {world.events.map((event) => (
-              <article key={event.id} className="event">
-                <strong>Tick {event.tick}</strong>
-                <p>{event.text}</p>
-                {event.dialogue ? <p className="dialogue-line">“{event.dialogue}”</p> : null}
-                {event.thought ? <small>{event.thought.emotion} · {event.thought.intention}</small> : null}
-                <span>{event.action}</span>
-              </article>
-            ))}
-          </div>
-        </section>
+        <GameMapView world={world} selectedAgentId={selectedAgentId} onSelectAgent={setSelectedAgentId} />
+        <EventLog world={world} />
       </section>
     </main>
   );
