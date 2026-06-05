@@ -13,15 +13,15 @@ This project explores a game/simulation where each agent has:
 - Social behavior: agents can talk, help, avoid, collaborate, argue, reconcile, or form groups.
 - World loop: time passes, agents act, the town changes, and stories emerge.
 
-The first version is intentionally small: no real LLM calls yet. It uses a deterministic local simulation so the game mechanics can be tested before connecting to external AI models.
+The project now has a pluggable AI brain architecture from the start. The browser prototype uses a safe mock LLM client and a local heuristic brain, while the code is structured so a real backend LLM adapter can be added later without rewriting the simulation.
 
 ## MVP goals
 
 1. Simulate 5-8 agents in a small town.
 2. Give every agent needs, mood, memory, relationships, and daily goals.
 3. Run a turn-based world loop.
-4. Display agent thoughts, actions, and memories.
-5. Add an LLM adapter later for dialogue and richer planning.
+4. Display agent thoughts, actions, memories, and dialogue.
+5. Support multiple brain modes: local heuristic brain, mock LLM brain, and future backend LLM brain.
 
 ## Architecture
 
@@ -31,6 +31,8 @@ UI Layer
 - Agent cards
 - Event log
 - Memory panel
+- Private thought panel
+- Brain mode selector
 
 Simulation Core
 - World state
@@ -38,12 +40,16 @@ Simulation Core
 - Needs system
 - Relationship graph
 - Memory system
-- Action planner
+- Action executor
 
-AI Layer
-- Local planner for MVP
-- LLM planner adapter later
-- Safety / permission filter
+AI Agent Layer
+- AgentBrain interface
+- AgentObservation object
+- AgentThought object
+- Local brain implementation
+- LLM brain adapter
+- Mock LLM client for frontend testing
+- Future backend LLM client
 
 Persistence Layer
 - LocalStorage for prototype
@@ -54,13 +60,31 @@ Persistence Layer
 
 ```txt
 Observe world
-  -> Update needs
-  -> Recall memory
-  -> Choose intention
-  -> Pick action
-  -> Apply action to world
+  -> Build AgentObservation
+  -> Send observation to AgentBrain
+  -> Generate private thought
+  -> Choose decision
+  -> Apply decision to world
   -> Store memory
-  -> Render result
+  -> Render event, dialogue, and thought
+```
+
+## Current brain modes
+
+### Local Heuristic Brain
+
+A deterministic planner that chooses actions based on the weakest need, current role, nearby agents, and recent state.
+
+### Mock LLM Brain
+
+A fake LLM client that follows the same adapter shape as a real model. This lets the game loop, JSON parsing, UI, and thought display be tested safely without exposing an API key in the browser.
+
+### Future Real LLM Brain
+
+The real LLM should be called from a backend service, not directly from the frontend. The backend can safely store provider keys and expose a controlled endpoint such as:
+
+```txt
+POST /api/agent/decide
 ```
 
 ## Example themes
@@ -80,4 +104,4 @@ npm run dev
 
 ## Status
 
-Prototype scaffold. Built as a starting point for brainstorming and rapid iteration.
+Prototype scaffold with an agent-native architecture, mock LLM brain, local brain, private thoughts, dialogue, memory, relationships, and a turn-based world loop.
