@@ -25,6 +25,10 @@ function getBrain(mode: BrainMode): AgentBrain {
   return mode === 'local' ? localBrain : mockLlmBrain;
 }
 
+function roleClass(role: AgentProfile['role']): string {
+  return role.toLowerCase();
+}
+
 function NeedBar({ label, value }: { label: keyof AgentNeeds; value: number }) {
   return (
     <div className="need-row">
@@ -40,8 +44,20 @@ function NeedBar({ label, value }: { label: keyof AgentNeeds; value: number }) {
 function AgentPawn({ agent, selected, onSelect }: { agent: AgentProfile; selected: boolean; onSelect: () => void }) {
   return (
     <button className={`agent-pawn ${selected ? 'selected' : ''}`} onClick={onSelect} title={`${agent.name} - ${agent.role}`}>
-      <span>{roleIcon[agent.role]}</span>
-      <strong>{agent.name.slice(0, 1)}</strong>
+      <span className={`character-sprite role-${roleClass(agent.role)}`}>
+        <span className="sprite-shadow" />
+        <span className="sprite-legs" />
+        <span className="sprite-body">
+          <span className="sprite-arm left" />
+          <span className="sprite-arm right" />
+        </span>
+        <span className="sprite-head">
+          <span className="sprite-hair" />
+          <span className="sprite-face" />
+        </span>
+        <span className="sprite-badge">{roleIcon[agent.role]}</span>
+        <span className="sprite-name">{agent.name}</span>
+      </span>
     </button>
   );
 }
