@@ -1,8 +1,18 @@
 import type { LlmChatMessage, LlmClient } from './types';
 
+function getLastUserMessage(messages: LlmChatMessage[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].role === 'user') {
+      return messages[index].content;
+    }
+  }
+
+  return '{}';
+}
+
 export class MockLlmClient implements LlmClient {
   async complete(messages: LlmChatMessage[]): Promise<string> {
-    const userMessage = messages.findLast((message) => message.role === 'user')?.content ?? '{}';
+    const userMessage = getLastUserMessage(messages);
 
     try {
       const parsed = JSON.parse(userMessage) as {
