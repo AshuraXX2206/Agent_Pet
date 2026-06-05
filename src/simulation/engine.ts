@@ -1,5 +1,14 @@
-import { planNextAction } from './planner';
-import type { AgentNeeds, AgentProfile, MemoryRecord, RelationshipRecord, WorldEvent, WorldState } from './types';
+import type { AgentBrain } from '../ai/types';
+import type {
+  ActionDecision,
+  AgentNeeds,
+  AgentProfile,
+  AgentThoughtState,
+  MemoryRecord,
+  RelationshipRecord,
+  WorldEvent,
+  WorldState,
+} from './types';
 
 function clamp(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -67,8 +76,13 @@ function updateRelationship(
   );
 }
 
-function applyAction(agent: AgentProfile, world: WorldState): { agent: AgentProfile; event: WorldEvent } {
-  const decision = planNextAction(agent, world);
+function applyDecision(
+  agent: AgentProfile,
+  world: WorldState,
+  decision: ActionDecision,
+  thought: AgentThoughtState,
+  dialogue?: string,
+): { agent: AgentProfile; event: WorldEvent } {
   const needs = decayNeeds(agent.needs);
   const target = decision.targetAgentId
     ? world.agents.find((candidate) => candidate.id === decision.targetAgentId)
@@ -147,7 +161,9 @@ function applyAction(agent: AgentProfile, world: WorldState): { agent: AgentProf
 
   nextAgent = {
     ...nextAgent,
-    memories: remember(nextAgent, world.tick + 1, text, importance),
+    lastThought: thought,
+    lastDialogue: dialogue,
+    memories: remember(nextAgent, world.tick + 1, dialogue ? `${text} "${dialogue}"` : text, importance),
   };
 
   return {
@@ -158,12 +174,30 @@ function applyAction(agent: AgentProfile, world: WorldState): { agent: AgentProf
       actorId: agent.id,
       action: decision.type,
       text,
+      thought,
+      dialogue,
     },
   };
 }
 
-export function stepWorld(world: WorldState): WorldState {
-  const results = world.agents.map((agent) => applyAction(agent, world));
+async function resolveAgent(agent: AgentProfile, world: WorldState, brain: AgentBrain) {
+  const nearbyAgents = world.agents.filter((candidate) => candidate.id !== agent.id && candidate.location === agent.location);
+  const fallbackNearbyAgents = nearbyAgents.length > 0
+    ? nearbyAgents
+    : world.agents.filter((candidate) => candidate.id !== agent.id).slice(0, 2);
+
+  const result = await brain.decide({
+    agent,
+    world: { tick: world.tick, timeOfDay: world.timeOfDay },
+    nearbyAgents: fallbackNearbyAgents,
+    recentEvents: world.events,
+  });
+
+  return applyDecision(agent, world, result.decision, result.thought, result.dialogue);
+}
+
+export async function stepWorldWithBrain(world: WorldState, brain: AgentBrain): Promise<WorldState> {
+  const results = await Promise.all(world.agents.map((agent) => resolveAgent(agent, world, brain)));
 
   return {
     tick: world.tick + 1,
