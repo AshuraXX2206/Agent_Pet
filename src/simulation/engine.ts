@@ -1,10 +1,13 @@
 import type { AgentBrain } from '../ai/types';
+import { findLocationTile, getTileAt, randomWalkableNeighbor, stepToward } from './map';
 import type {
   ActionDecision,
   AgentNeeds,
   AgentProfile,
   AgentThoughtState,
+  LocationId,
   MemoryRecord,
+  Position,
   RelationshipRecord,
   WorldEvent,
   WorldState,
@@ -76,6 +79,41 @@ function updateRelationship(
   );
 }
 
+function locationForAction(decision: ActionDecision, agent: AgentProfile): LocationId | undefined {
+  if (decision.location) return decision.location;
+  if (decision.type === 'eat') return 'kitchen';
+  if (decision.type === 'work') return agent.location;
+  if (decision.type === 'help') return 'clinic';
+  if (decision.type === 'socialize') return 'square';
+  if (decision.type === 'explore') return 'forest';
+  return undefined;
+}
+
+function moveForDecision(agent: AgentProfile, world: WorldState, decision: ActionDecision, target?: AgentProfile): Position {
+  if (target && (decision.type === 'socialize' || decision.type === 'help')) {
+    return stepToward(world.map, agent.position, target.position);
+  }
+
+  if (decision.type === 'explore') {
+    return randomWalkableNeighbor(world.map, agent.position, world.tick + agent.name.length);
+  }
+
+  const targetLocation = locationForAction(decision, agent);
+  const targetTile = targetLocation ? findLocationTile(world.map, targetLocation) : undefined;
+
+  if (targetTile) {
+    return stepToward(world.map, agent.position, targetTile);
+  }
+
+  return agent.position;
+}
+
+function updateLocationFromPosition(agent: AgentProfile, world: WorldState): AgentProfile {
+  const tile = getTileAt(world.map, agent.position);
+  if (!tile?.location) return agent;
+  return { ...agent, location: tile.location };
+}
+
 function applyDecision(
   agent: AgentProfile,
   world: WorldState,
@@ -88,7 +126,13 @@ function applyDecision(
     ? world.agents.find((candidate) => candidate.id === decision.targetAgentId)
     : undefined;
 
-  let nextAgent: AgentProfile = { ...agent, needs };
+  let nextAgent: AgentProfile = {
+    ...agent,
+    needs,
+    position: moveForDecision(agent, world, decision, target),
+  };
+  nextAgent = updateLocationFromPosition(nextAgent, world);
+
   let text = decision.reason;
   let importance = 4;
 
@@ -103,10 +147,9 @@ function applyDecision(
     case 'eat':
       nextAgent = {
         ...nextAgent,
-        location: 'kitchen',
         needs: { ...nextAgent.needs, hunger: clamp(nextAgent.needs.hunger + 35), mood: clamp(nextAgent.needs.mood + 5) },
       };
-      text = `${agent.name} goes to the kitchen and eats something warm.`;
+      text = `${agent.name} heads toward the kitchen and eats something warm.`;
       break;
     case 'socialize':
       nextAgent = {
@@ -117,7 +160,7 @@ function applyDecision(
           : nextAgent.relationships,
       };
       text = target
-        ? `${agent.name} talks with ${target.name}. The conversation makes the day feel less lonely.`
+        ? `${agent.name} moves closer to ${target.name} and starts a conversation.`
         : `${agent.name} looks for someone to talk to but finds the village unusually quiet.`;
       importance = 6;
       break;
@@ -137,24 +180,23 @@ function applyDecision(
           : nextAgent.relationships,
       };
       text = target
-        ? `${agent.name} helps ${target.name} after noticing they seemed worn down.`
+        ? `${agent.name} walks toward ${target.name} to offer help.`
         : `${agent.name} prepares to help someone, but cannot find who needs it most.`;
       importance = 7;
       break;
     case 'explore':
       nextAgent = {
         ...nextAgent,
-        location: 'square',
         needs: { ...nextAgent.needs, purpose: clamp(nextAgent.needs.purpose + 18), mood: clamp(nextAgent.needs.mood + 6) },
       };
-      text = `${agent.name} scouts the edge of town and returns with small observations.`;
+      text = `${agent.name} wanders through the village paths and scouts the surroundings.`;
       break;
     case 'reflect':
       nextAgent = {
         ...nextAgent,
         needs: { ...nextAgent.needs, mood: clamp(nextAgent.needs.mood + 18), purpose: clamp(nextAgent.needs.purpose + 8) },
       };
-      text = `${agent.name} reflects on recent events and adjusts their priorities.`;
+      text = `${agent.name} pauses in place and reflects on recent events.`;
       importance = 8;
       break;
   }
@@ -181,7 +223,10 @@ function applyDecision(
 }
 
 async function resolveAgent(agent: AgentProfile, world: WorldState, brain: AgentBrain) {
-  const nearbyAgents = world.agents.filter((candidate) => candidate.id !== agent.id && candidate.location === agent.location);
+  const nearbyAgents = world.agents.filter((candidate) => {
+    const distance = Math.abs(candidate.position.x - agent.position.x) + Math.abs(candidate.position.y - agent.position.y);
+    return candidate.id !== agent.id && distance <= 3;
+  });
   const fallbackNearbyAgents = nearbyAgents.length > 0
     ? nearbyAgents
     : world.agents.filter((candidate) => candidate.id !== agent.id).slice(0, 2);
@@ -200,6 +245,7 @@ export async function stepWorldWithBrain(world: WorldState, brain: AgentBrain): 
   const results = await Promise.all(world.agents.map((agent) => resolveAgent(agent, world, brain)));
 
   return {
+    ...world,
     tick: world.tick + 1,
     timeOfDay: nextTimeOfDay(world.tick + 1),
     agents: results.map((result) => result.agent),
