@@ -41,6 +41,12 @@ export interface RelationshipRecord {
   lastInteractionTick: number;
 }
 
+export interface AgentThoughtState {
+  intention: string;
+  emotion: string;
+  plan: string[];
+}
+
 export interface AgentProfile {
   id: string;
   name: string;
@@ -51,6 +57,8 @@ export interface AgentProfile {
   needs: AgentNeeds;
   memories: MemoryRecord[];
   relationships: RelationshipRecord[];
+  lastThought?: AgentThoughtState;
+  lastDialogue?: string;
 }
 
 export interface WorldEvent {
@@ -59,6 +67,8 @@ export interface WorldEvent {
   actorId: string;
   action: AgentActionType;
   text: string;
+  thought?: AgentThoughtState;
+  dialogue?: string;
 }
 
 export interface WorldState {
