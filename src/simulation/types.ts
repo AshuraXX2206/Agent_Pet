@@ -8,7 +8,9 @@ export type AgentRole =
   | 'Scout'
   | 'Artist';
 
-export type LocationId = 'square' | 'workshop' | 'garden' | 'clinic' | 'kitchen' | 'studio';
+export type LocationId = 'square' | 'workshop' | 'garden' | 'clinic' | 'kitchen' | 'studio' | 'forest' | 'lake';
+
+export type TileType = 'grass' | 'path' | 'water' | 'building' | 'garden' | 'forest';
 
 export type AgentActionType =
   | 'rest'
@@ -18,6 +20,26 @@ export type AgentActionType =
   | 'help'
   | 'explore'
   | 'reflect';
+
+export interface Position {
+  x: number;
+  y: number;
+}
+
+export interface MapTile {
+  x: number;
+  y: number;
+  type: TileType;
+  location?: LocationId;
+  label?: string;
+  walkable: boolean;
+}
+
+export interface GameMap {
+  width: number;
+  height: number;
+  tiles: MapTile[];
+}
 
 export interface AgentNeeds {
   energy: number;
@@ -54,6 +76,7 @@ export interface AgentProfile {
   personality: string;
   goal: string;
   location: LocationId;
+  position: Position;
   needs: AgentNeeds;
   memories: MemoryRecord[];
   relationships: RelationshipRecord[];
@@ -74,6 +97,7 @@ export interface WorldEvent {
 export interface WorldState {
   tick: number;
   timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night';
+  map: GameMap;
   agents: AgentProfile[];
   events: WorldEvent[];
 }
