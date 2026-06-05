@@ -18,7 +18,8 @@ body {
     #090b12;
 }
 
-button {
+button,
+select {
   font: inherit;
 }
 
@@ -67,16 +68,23 @@ button {
 }
 
 .world-controls {
-  min-width: 220px;
+  min-width: 240px;
   display: grid;
   gap: 10px;
 }
 
-.world-controls span {
+.world-controls span,
+.world-controls select {
   padding: 10px 14px;
   border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f7f1df;
   background: rgba(255, 255, 255, 0.08);
   text-transform: capitalize;
+}
+
+.world-controls select {
+  cursor: pointer;
 }
 
 .world-controls button {
@@ -87,6 +95,11 @@ button {
   background: #ffd37a;
   font-weight: 800;
   cursor: pointer;
+}
+
+.world-controls button:disabled {
+  opacity: 0.65;
+  cursor: wait;
 }
 
 .world-controls button:last-child {
@@ -162,6 +175,12 @@ button {
   color: rgba(247, 241, 223, 0.68);
 }
 
+.dialogue-line {
+  margin: 0;
+  color: rgba(255, 211, 122, 0.92);
+  font-style: italic;
+}
+
 .agent-header span,
 .event span,
 .memory span,
@@ -172,11 +191,29 @@ button {
   text-transform: capitalize;
 }
 
-.goal.large {
+.goal.large,
+.thought-box {
   padding: 16px;
   border-radius: 18px;
   background: rgba(255, 211, 122, 0.09);
   color: rgba(247, 241, 223, 0.86);
+}
+
+.thought-box {
+  display: grid;
+  gap: 10px;
+  background: rgba(92, 140, 255, 0.1);
+}
+
+.thought-box p,
+.thought-box ul {
+  margin: 0;
+}
+
+.thought-box ul {
+  padding-left: 20px;
+  color: rgba(247, 241, 223, 0.74);
+  line-height: 1.5;
 }
 
 .detail-panel h3 {
@@ -219,6 +256,13 @@ button {
   margin: 8px 0;
   color: rgba(247, 241, 223, 0.72);
   line-height: 1.55;
+}
+
+.event small {
+  display: block;
+  margin: 8px 0;
+  color: rgba(247, 241, 223, 0.5);
+  line-height: 1.45;
 }
 
 .relationship {
